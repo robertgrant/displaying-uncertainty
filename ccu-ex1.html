@@ -1,0 +1,457 @@
+<!-- Ah! A source code reader. Do come in, I've been expecting you.
+	This borrows a function for switching animation on
+	and resetting when turned off, from Oli Hawkins
+	http://olihawkins.com/visualisation/1 
+	and the normal cdf is adapted from Tom Ferguson
+	www.math.ucla.edu/~tom/distributions/normal.html
+	(respec')
+	For stats nerds: data are random bivariate x_i~N(10,1) ; y_i~N(x_i,2)
+	and written into json format from Stata -->
+
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<title>CCU 2015 Example 1</title>
+	<script type='text/javascript' src='d3.v3.min.js'></script>
+
+	<style>
+		body { 
+			font-family: 'helvetica'; 
+		}
+		path { 
+			stroke: steelblue;
+			stroke-width: 1;
+			fill: none;
+		}
+		.axis path, .axis line {
+			fill: none;
+			stroke: grey;
+			stroke-width: 1;
+			shape-rendering: crispEdges;
+		     }
+		.dot {
+			fill: rgba(255,255,255,0);
+			stroke: steelblue;
+		}
+		div.tooltip {
+			position: absolute;
+			text-align: center;
+			width: 100px;
+			height: 48px;
+			padding: 2px;
+			font: 12px sans-serif;
+			background: lightsteelblue;
+			border: 0px;
+			border-radius: 8px;
+			pointer-events: none;
+		}
+		button { 
+			margin: 0 7px 0 0;
+			background-color: #f5f5f5;
+			border: 1px solid #dedede;
+			border-top: 1px solid #eee;
+			border-left: 1px solid #eee;
+			font-size: 12px;
+			line-height: 130%;
+			text-decoration: none;
+			font-weight: bold;
+			color: #565656;
+			cursor: pointer;
+		}
+	</style>
+
+</head>
+
+<body>
+
+<h2>Communicating uncertainty</h2>
+<p>Can interactive graphics help? In this experimental visualisation, a single estimated point (x=10, y=10) carries some uncertainty. By clicking on the button below, a series of probable values appears. These might be bootstrapped values, draws from a posterior joint distribution, or just representing a theoretical sampling distribution. By clicking on the chart region, you can see the probability of the true value being as far away as your point, or further. (My wording is unapologetically Bayesian.) <em>and by the way, this version is for the CCU conference and right now, I'm still trying to debug the confidence ellipse</em></p>
+<button onclick="animateit()">Show probable true values</button>
+
+<script type='text/javascript'>
+// various size parameters and scales
+	var margin = {top: 30, left: 80, right: 300, bottom: 60},
+		width = 900 - margin.left - margin.right,
+		height = 310 - margin.top - margin.bottom,
+		axisLabelSpace = 50,
+		legendSpace = 100,
+		x = d3.scale.linear().range([0, width]),
+		y = d3.scale.linear().range([height, 0]),
+		xAxis = d3.svg.axis().scale(x).orient('bottom').ticks(5),
+		yAxis = d3.svg.axis().scale(y).orient('left').ticks(5),
+		domainPadding = 0.2,
+		mausx=0,mausy=0,xx=0,yy=0,
+		ellipserad=0,ellipsedeg=0,ellipsex=0,ellipsey=0,ellipsesize=0,
+		xt=0,yt=0,xd=0,yd=0,xpr=0,ypr=0,perc=0,
+		varx=1,vary=Math.sqrt(5);
+
+	svg = d3.select('body')
+		.append('svg')
+			.attr('id','thesvg')
+			.attr('width', width + margin.left + margin.right)
+			.attr('height', height + margin.top + margin.bottom)
+			.on("click", function() {
+				mausx=d3.mouse(this)[0];
+				xx=-1*Math.abs((mausx-(x(10)+margin.left))/(x(11)-x(10)));
+				xt=1/(1+.2316419*Math.abs(xx));				xd=.3989423*Math.exp(-xx*xx/2);				xpr=xd*xt*(.3193815+xt*(-.3565638+xt*(1.781478+xt*(-1.821256+xt*1.330274))));				xpr=2*xpr;
+				mausy=d3.mouse(this)[1];
+				yy=-1*Math.abs((mausy-(y(x.invert(mausx-margin.left))+margin.top))/
+						(Math.sqrt(5)*(y(9)-y(10))));
+				yt=1/(1+.2316419*Math.abs(yy));				yd=.3989423*Math.exp(-yy*yy/2);				ypr=yd*yt*(.3193815+yt*(-.3565638+yt*(1.781478+yt*(-1.821256+yt*1.330274))));				ypr=2*ypr;
+				perc = Math.round(xpr*ypr*1000)/10;
+				div.transition()
+					.duration(200)
+					.style('opacity',.9);
+				var ttleft=d3.event.pageX+4;
+				if (mausx<(x(10)+margin.left)) {
+					ttleft=ttleft-112;
+				}
+				div.html('Chance of being here or further out: '+perc+"%")
+					.style('left',(ttleft) + 'px')
+					.style('top',(d3.event.pageY - 24) + 'px');
+				svg.selectAll('#ciclick').remove();
+				svg.selectAll('#theci').remove();
+				svg.append('circle')
+					.attr('r', 2)
+					.attr('id', 'ciclick')
+					.style('stroke','rgba(42,43,103,255)')
+					.style('fill','rgba(42,43,103,255)')
+					.attr('cx', mausx-margin.left)
+					.attr('cy', mausy-margin.top);
+				ellipserad=-1*Math.atan((vary*(y(9)-y(10)))/(varx*(x(10)-x(9))));
+				ellipsedeg=57.296*ellipserad;
+				ellipsex=((x.invert(mausx-margin.left)-10)*Math.cos(-1*ellipserad))-
+					((y.invert(mausy-margin.top)-10)*Math.sin(-1*ellipserad));
+				ellipsey=((x.invert(mausx-margin.left)-10)*Math.sin(-1*ellipserad))-
+					((y.invert(mausy-margin.top)-10)*Math.cos(-1*ellipserad));
+				ellipsesize=Math.sqrt((ellipsex*ellipsex) +(ellipsey*ellipsey/5));
+				svg.append('ellipse')
+					.attr('id','theci')
+					.attr('cx',x(10))
+					.attr('cy',y(10))
+					.attr('rx',(x(10)-x(9))*ellipsesize)
+					.attr('ry',(y(9)-y(10))*Math.sqrt(5)*ellipsesize)
+					.attr('transform','rotate('+ellipsedeg+','+x(10)+','+y(10)+')')
+					.style('stroke','rgba(42,43,103,200)')
+					.style('fill','rgba(42,43,103,0)');
+			})
+		.append('g')
+			.attr('transform',
+				'translate(' + margin.left + ',' + margin.top + ')')
+			.attr('id', 'chart');
+
+	var div = d3.select('body').append('div')
+		.attr('class', 'tooltip')
+		.style('opacity', 0);
+
+	var point = [ {'xvar': 10.0, 'yvar': 10.0} ];
+
+	var scatterdata = [
+			{'xvar': 10.64566040039063, 'yvar': 13.14980125427246},
+			{'xvar': 11.26272869110107, 'yvar': 11.66628551483154},
+			{'xvar': 8.81586742401123, 'yvar': 10.67208099365234},
+			{'xvar': 10.11162090301514, 'yvar': 11.30037307739258},
+			{'xvar': 10.13096904754639, 'yvar': 12.85015296936035},
+			{'xvar': 9.528786659240723, 'yvar': 9.286680221557617},
+			{'xvar': 11.45989608764648, 'yvar': 10.10413360595703},
+			{'xvar': 11.49071502685547, 'yvar': 9.454405784606934},
+			{'xvar': 8.928596496582031, 'yvar': 9.27088737487793},
+			{'xvar': 8.48707389831543, 'yvar': 7.630751609802246},
+			{'xvar': 9.017354011535645, 'yvar': 7.888540267944336},
+			{'xvar': 11.49888324737549, 'yvar': 14.6321964263916},
+			{'xvar': 10.84063339233398, 'yvar': 12.27363014221191},
+			{'xvar': 10.45740604400635, 'yvar': 9.82361888885498},
+			{'xvar': 7.373846530914307, 'yvar': 3.845852375030518},
+			{'xvar': 9.779230117797852, 'yvar': 10.50381851196289},
+			{'xvar': 9.800041198730469, 'yvar': 7.613240718841553},
+			{'xvar': 10.67782306671143, 'yvar': 10.37424468994141},
+			{'xvar': 11.20606231689453, 'yvar': 9.501338958740234},
+			{'xvar': 9.03056526184082, 'yvar': 8.619533538818359},
+			{'xvar': 8.260190963745117, 'yvar': 5.527945041656494},
+			{'xvar': 10.29852867126465, 'yvar': 7.534244537353516},
+			{'xvar': 10.50275707244873, 'yvar': 12.01848316192627},
+			{'xvar': 9.35059642791748, 'yvar': 10.11066150665283},
+			{'xvar': 10.50742149353027, 'yvar': 7.759825706481934},
+			{'xvar': 9.281054496765137, 'yvar': 9.680940628051758},
+			{'xvar': 10.87034606933594, 'yvar': 8.515599250793457},
+			{'xvar': 10.5334529876709, 'yvar': 10.25033950805664},
+			{'xvar': 11.51478958129883, 'yvar': 8.177997589111328},
+			{'xvar': 9.781673431396484, 'yvar': 11.24573612213135},
+			{'xvar': 9.972851753234863, 'yvar': 10.49047183990479},
+			{'xvar': 8.350071907043457, 'yvar': 9.131296157836914},
+			{'xvar': 8.908894538879395, 'yvar': 11.0225658416748},
+			{'xvar': 9.04152774810791, 'yvar': 8.14007568359375},
+			{'xvar': 8.952784538269043, 'yvar': 5.843285083770752},
+			{'xvar': 10.29336166381836, 'yvar': 9.05827522277832},
+			{'xvar': 10.52163887023926, 'yvar': 9.392223358154297},
+			{'xvar': 11.85356426239014, 'yvar': 14.05900955200195},
+			{'xvar': 8.574972152709961, 'yvar': 11.88996696472168},
+			{'xvar': 8.830866813659668, 'yvar': 10.09348297119141},
+			{'xvar': 11.59007167816162, 'yvar': 7.852967262268066},
+			{'xvar': 9.383138656616211, 'yvar': 13.09648323059082},
+			{'xvar': 10.76312637329102, 'yvar': 10.44686794281006},
+			{'xvar': 10.44878387451172, 'yvar': 8.15923023223877},
+			{'xvar': 10.61282253265381, 'yvar': 11.3860034942627},
+			{'xvar': 9.439393043518066, 'yvar': 8.462541580200195},
+			{'xvar': 9.867486953735352, 'yvar': 10.07005405426025},
+			{'xvar': 10.22557735443115, 'yvar': 10.05547046661377},
+			{'xvar': 10.07953929901123, 'yvar': 11.14366912841797},
+			{'xvar': 10.87584209442139, 'yvar': 12.52911376953125},
+			{'xvar': 11.79215240478516, 'yvar': 12.17081451416016},
+			{'xvar': 9.764334678649902, 'yvar': 9.320344924926758},
+			{'xvar': 10.59035205841064, 'yvar': 12.62614727020264},
+			{'xvar': 10.9196310043335, 'yvar': 10.69891452789307},
+			{'xvar': 9.46312141418457, 'yvar': 12.11173915863037},
+			{'xvar': 7.414963722229004, 'yvar': 4.664340019226074},
+			{'xvar': 11.1242733001709, 'yvar': 9.568194389343262},
+			{'xvar': 8.786026000976563, 'yvar': 8.320520401000977},
+			{'xvar': 9.616321563720703, 'yvar': 8.213637351989746},
+			{'xvar': 11.50473594665527, 'yvar': 9.928688049316406},
+			{'xvar': 10.89710712432861, 'yvar': 14.71645164489746},
+			{'xvar': 11.2148609161377, 'yvar': 10.32378482818604},
+			{'xvar': 13.23787403106689, 'yvar': 12.97123432159424},
+			{'xvar': 9.052011489868164, 'yvar': 7.069540500640869},
+			{'xvar': 10.58090972900391, 'yvar': 12.97146224975586},
+			{'xvar': 9.359218597412109, 'yvar': 8.515499114990234},
+			{'xvar': 9.201824188232422, 'yvar': 8.266088485717773},
+			{'xvar': 10.76413440704346, 'yvar': 10.29900932312012},
+			{'xvar': 10.68906497955322, 'yvar': 10.28563404083252},
+			{'xvar': 9.282777786254883, 'yvar': 10.95143699645996},
+			{'xvar': 9.527077674865723, 'yvar': 8.508039474487305},
+			{'xvar': 9.899948120117188, 'yvar': 11.74655818939209},
+			{'xvar': 9.981073379516602, 'yvar': 9.340306282043457},
+			{'xvar': 9.464188575744629, 'yvar': 10.47923278808594},
+			{'xvar': 10.56954574584961, 'yvar': 11.45121192932129},
+			{'xvar': 9.48912525177002, 'yvar': 10.90623760223389},
+			{'xvar': 11.59481334686279, 'yvar': 10.90766334533691},
+			{'xvar': 7.925889015197754, 'yvar': 5.378792285919189},
+			{'xvar': 9.178230285644531, 'yvar': 13.9264612197876},
+			{'xvar': 10.65526103973389, 'yvar': 6.415960788726807},
+			{'xvar': 10.02313327789307, 'yvar': 7.992444515228271},
+			{'xvar': 10.28130435943604, 'yvar': 12.17747592926025},
+			{'xvar': 9.757615089416504, 'yvar': 10.8233757019043},
+			{'xvar': 10.33067893981934, 'yvar': 9.579990386962891},
+			{'xvar': 7.924559116363525, 'yvar': 5.459960460662842},
+			{'xvar': 9.122438430786133, 'yvar': 6.819137096405029},
+			{'xvar': 10.49079990386963, 'yvar': 10.56799793243408},
+			{'xvar': 10.402099609375, 'yvar': 6.683776378631592},
+			{'xvar': 8.691402435302734, 'yvar': 12.14402103424072},
+			{'xvar': 10.0542106628418, 'yvar': 10.21655178070068},
+			{'xvar': 10.65732765197754, 'yvar': 8.59803581237793},
+			{'xvar': 10.82173442840576, 'yvar': 9.221755027770996},
+			{'xvar': 9.90308952331543, 'yvar': 9.169265747070313},
+			{'xvar': 11.15163230895996, 'yvar': 9.886260986328125},
+			{'xvar': 10.95578765869141, 'yvar': 12.20336723327637},
+			{'xvar': 10.81267547607422, 'yvar': 11.19787216186523},
+			{'xvar': 9.627302169799805, 'yvar': 8.330748558044434},
+			{'xvar': 9.365700721740723, 'yvar': 10.72052001953125},
+			{'xvar': 8.589978218078613, 'yvar': 5.503729820251465},
+			{'xvar': 11.42473125457764, 'yvar': 14.66489696502686},
+			{'xvar': 10.34945106506348, 'yvar': 7.597509860992432},
+			{'xvar': 12.55959129333496, 'yvar': 17.26237297058105},
+			{'xvar': 10.31681728363037, 'yvar': 8.938657760620117},
+			{'xvar': 9.460021018981934, 'yvar': 9.428651809692383},
+			{'xvar': 10.03359413146973, 'yvar': 10.37481880187988},
+			{'xvar': 10.17624568939209, 'yvar': 6.817679405212402},
+			{'xvar': 9.171838760375977, 'yvar': 10.29549789428711},
+			{'xvar': 9.690177917480469, 'yvar': 6.111020565032959},
+			{'xvar': 8.866765975952148, 'yvar': 7.064401149749756},
+			{'xvar': 8.758745193481445, 'yvar': 6.153963088989258},
+			{'xvar': 10.32783126831055, 'yvar': 14.11808681488037},
+			{'xvar': 11.45531558990479, 'yvar': 8.760997772216797},
+			{'xvar': 9.084014892578125, 'yvar': 8.319273948669434},
+			{'xvar': 10.34253406524658, 'yvar': 12.41180419921875},
+			{'xvar': 10.11905384063721, 'yvar': 8.498510360717773},
+			{'xvar': 8.239809036254883, 'yvar': 10.34784507751465},
+			{'xvar': 9.54958438873291, 'yvar': 7.634208679199219},
+			{'xvar': 9.395633697509766, 'yvar': 12.6479024887085},
+			{'xvar': 9.703917503356934, 'yvar': 12.87007617950439},
+			{'xvar': 10.30177783966064, 'yvar': 8.283123970031738},
+			{'xvar': 11.69793033599854, 'yvar': 13.66372203826904},
+			{'xvar': 9.318379402160645, 'yvar': 5.334807872772217},
+			{'xvar': 10.21506977081299, 'yvar': 10.88617324829102},
+			{'xvar': 9.882668495178223, 'yvar': 9.941418647766113},
+			{'xvar': 9.96226692199707, 'yvar': 6.583465099334717},
+			{'xvar': 9.410717964172363, 'yvar': 8.04889965057373},
+			{'xvar': 10.91917610168457, 'yvar': 11.34646129608154},
+			{'xvar': 8.756644248962402, 'yvar': 8.634239196777344},
+			{'xvar': 10.54393672943115, 'yvar': 11.66453075408936},
+			{'xvar': 10.17032432556152, 'yvar': 10.81545066833496},
+			{'xvar': 11.02249526977539, 'yvar': 9.79006290435791},
+			{'xvar': 10.71389293670654, 'yvar': 7.37822961807251},
+			{'xvar': 10.94475364685059, 'yvar': 10.18049621582031},
+			{'xvar': 10.01538753509521, 'yvar': 10.70965003967285},
+			{'xvar': 10.56779098510742, 'yvar': 9.926763534545898},
+			{'xvar': 9.613656997680664, 'yvar': 12.05175304412842},
+			{'xvar': 10.49951457977295, 'yvar': 9.379458427429199},
+			{'xvar': 8.840547561645508, 'yvar': 4.97105884552002},
+			{'xvar': 10.33252334594727, 'yvar': 11.18061447143555},
+			{'xvar': 11.45681190490723, 'yvar': 12.26119136810303},
+			{'xvar': 10.24918174743652, 'yvar': 10.57428359985352},
+			{'xvar': 12.04753589630127, 'yvar': 14.82233715057373},
+			{'xvar': 10.09901237487793, 'yvar': 12.28229236602783},
+			{'xvar': 9.125960350036621, 'yvar': 9.328551292419434},
+			{'xvar': 11.94253921508789, 'yvar': 11.46990299224854},
+			{'xvar': 10.42917728424072, 'yvar': 10.56250476837158},
+			{'xvar': 9.389148712158203, 'yvar': 10.80135822296143},
+			{'xvar': 10.66928386688232, 'yvar': 9.106612205505371},
+			{'xvar': 10.55676555633545, 'yvar': 10.12650108337402},
+			{'xvar': 10.83292579650879, 'yvar': 13.29998970031738},
+			{'xvar': 9.198991775512695, 'yvar': 9.462972640991211},
+			{'xvar': 9.498116493225098, 'yvar': 13.10226821899414},
+			{'xvar': 10.71388053894043, 'yvar': 9.749794006347656},
+			{'xvar': 9.502756118774414, 'yvar': 9.322629928588867},
+			{'xvar': 11.95667552947998, 'yvar': 10.65261363983154},
+			{'xvar': 8.057440757751465, 'yvar': 10.49277210235596},
+			{'xvar': 11.15179824829102, 'yvar': 9.978875160217285},
+			{'xvar': 9.47984790802002, 'yvar': 10.86083126068115},
+			{'xvar': 8.148232460021973, 'yvar': 5.068769931793213},
+			{'xvar': 10.30256080627441, 'yvar': 8.978105545043945},
+			{'xvar': 10.18780612945557, 'yvar': 10.20572376251221},
+			{'xvar': 11.48213863372803, 'yvar': 12.64202499389648},
+			{'xvar': 9.997194290161133, 'yvar': 11.26801586151123},
+			{'xvar': 9.309341430664063, 'yvar': 8.666150093078613},
+			{'xvar': 9.848527908325195, 'yvar': 9.075543403625488},
+			{'xvar': 10.97336673736572, 'yvar': 11.29763412475586},
+			{'xvar': 10.14554691314697, 'yvar': 10.79591178894043},
+			{'xvar': 10.07737922668457, 'yvar': 7.147810459136963},
+			{'xvar': 8.617411613464355, 'yvar': 6.065084457397461},
+			{'xvar': 9.501587867736816, 'yvar': 6.338205814361572},
+			{'xvar': 10.45294284820557, 'yvar': 11.01156997680664},
+			{'xvar': 9.787124633789063, 'yvar': 10.54541492462158},
+			{'xvar': 8.489563941955566, 'yvar': 9.973490715026855},
+			{'xvar': 10.82701683044434, 'yvar': 10.73304748535156},
+			{'xvar': 10.29631233215332, 'yvar': 8.411220550537109},
+			{'xvar': 8.665509223937988, 'yvar': 6.331447124481201},
+			{'xvar': 8.912575721740723, 'yvar': 9.390978813171387},
+			{'xvar': 8.886759757995605, 'yvar': 7.135268211364746},
+			{'xvar': 10.46775436401367, 'yvar': 9.430489540100098},
+			{'xvar': 11.34801387786865, 'yvar': 14.81942462921143},
+			{'xvar': 9.943804740905762, 'yvar': 8.51558780670166},
+			{'xvar': 8.678726196289063, 'yvar': 5.238880157470703},
+			{'xvar': 8.567862510681152, 'yvar': 10.04736328125},
+			{'xvar': 10.81808090209961, 'yvar': 7.460287094116211},
+			{'xvar': 10.63148021697998, 'yvar': 11.45229339599609},
+			{'xvar': 8.255038261413574, 'yvar': 3.782251358032227},
+			{'xvar': 8.58419132232666, 'yvar': 8.761421203613281},
+			{'xvar': 10.78927230834961, 'yvar': 10.05489349365234},
+			{'xvar': 10.35389232635498, 'yvar': 9.579103469848633},
+			{'xvar': 10.27316665649414, 'yvar': 11.89264869689941},
+			{'xvar': 10.40069961547852, 'yvar': 8.676751136779785},
+			{'xvar': 8.80295467376709, 'yvar': 6.819492340087891},
+			{'xvar': 10.90843105316162, 'yvar': 12.37991523742676},
+			{'xvar': 10.46598434448242, 'yvar': 9.03666877746582},
+			{'xvar': 9.435127258300781, 'yvar': 8.761460304260254},
+			{'xvar': 8.351809501647949, 'yvar': 10.03463935852051},
+			{'xvar': 10.18250179290771, 'yvar': 10.78887939453125},
+			{'xvar': 10.46751689910889, 'yvar': 9.00738525390625},
+			{'xvar': 11.25460243225098, 'yvar': 11.10492420196533},
+			{'xvar': 10.82046794891357, 'yvar': 13.55308818817139}
+			];
+
+	var scatterminx = d3.min(scatterdata, function(d) { return d.xvar; });
+	var scattermaxx = d3.max(scatterdata, function(d) { return d.xvar; });
+	var scatterminy = d3.min(scatterdata, function(d) { return d.yvar; });
+	var scattermaxy = d3.max(scatterdata, function(d) { return d.yvar; });
+	var allminx = scatterminx - domainPadding * (scattermaxx-scatterminx);
+	var allmaxx = scattermaxx + domainPadding * (scattermaxx-scatterminx);
+	var allminy = scatterminy - domainPadding * (scattermaxy-scatterminy);
+	var allmaxy = scattermaxy + domainPadding * (scattermaxy-scatterminy);
+
+	x.domain([allminx,allmaxx]);
+	y.domain([allminy,allmaxy]);
+
+	// draw the posterior points (transparent to begin)
+	svg.selectAll('dot')
+		.data(scatterdata)
+		.enter().append('circle')
+			.attr('r', 3.5)
+			.attr('id', function(d,i) {
+				return 'scatter'+i;})
+			.style('stroke','rgba(255,255,255,0)')
+			.style('fill','rgba(255,255,255,0)')
+			.attr('cx', function(d) { return x(d.xvar); })
+			.attr('cy', function(d) { return y(d.yvar); });
+
+	// draw the point estimate
+	svg.selectAll('dot')
+		.data(point)
+		.enter().append('circle')
+			.attr('r', 6)
+			.attr('id', 'point')
+			.style('stroke','rgba(103,42,43,255)')
+			.style('fill','rgba(103,42,43,70)')
+			.attr('cx', function(d) { return x(d.xvar); })
+			.attr('cy', function(d) { return y(d.yvar); });
+
+	svg.append('g')
+		.attr('class', 'x axis')
+		.attr('transform', 'translate(0,' + height + ')')
+		.call(xAxis);
+
+	svg.append('text')
+		.attr('transform','translate('+(width/2)+','+(height+axisLabelSpace)+')')
+		.style('text-anchor','middle')
+		.text('A variable');
+
+	svg.append('g')
+		.attr('class', 'y axis')
+		.call(yAxis);
+
+	svg.append('text')
+		.attr('transform','rotate(-90)')
+		.attr('x',0-(height/2))
+		.attr('y',0-axisLabelSpace)
+		.attr('dy','1em')
+		.style('text-anchor','middle')
+		.text('Another variable');
+
+	// stuff for animation
+	var currentdot=0, lastdot=0;
+	var animateId, animating = false;
+
+	// function to reset chart to point estimate only
+	var resetChart = function () {
+		svg.selectAll('#ciclick').remove();
+		svg.selectAll('#theci').remove();
+		svg.selectAll('circle')
+				.style('stroke','rgba(42,43,103,0)')
+				.style('fill','rgba(42,43,103,0)');
+		svg.selectAll('#point')
+			.style('fill','rgba(103,42,43,90)')
+			.style('stroke','rgba(103,42,43,180)');
+		currentdot=0;
+		lastdot=0; 
+		div.transition()
+			.duration(200)
+			.style('opacity',0);
+	}
+
+	// function to advance
+	var wiggleit = function() {
+			d3.selectAll('#scatter'+lastdot).transition().duration(500)
+				.style('stroke','rgba(170,170,170,180)')
+				.style('fill','rgba(170,170,170,0)');
+			d3.selectAll('#scatter'+currentdot).transition().duration(500)
+				.style('fill','rgba(255,255,255,180)');
+			lastdot=currentdot;
+			currentdot=currentdot+1;
+	};
+
+// On click, start or stop animation of randomised data
+	var animateit = function() {
+			if (animating === false) {
+				animating = true;
+				wiggleit();
+				animateId = setInterval(wiggleit, 800);
+			}
+			else {
+				animating = false;
+				clearInterval(animateId);
+				resetChart();
+			}
+		};
+
+</script>
+</body>
