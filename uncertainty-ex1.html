@@ -6,13 +6,19 @@
 	www.math.ucla.edu/~tom/distributions/normal.html
 	(respec')
 	For stats nerds: data are random bivariate x_i~N(10,1) ; y_i~N(x_i,2)
-	and written into json format from Stata -->
+	and written into json format from Stata 
+
+	Things to do: using SVG rotation of the ellipse in this
+	context to fit it orthogonally relies on having the same
+	domain and svg area in pixels, for both x and y. It would
+	be nice to escape from this but it is not essential for this
+	experimental version. -->
 
 <!DOCTYPE html>
 <html>
 <head>
 	<meta charset='utf-8'>
-	<title>CCU 2015 Example 1</title>
+	<title>Displaying uncertainty with D3: Example 1</title>
 	<script type='text/javascript' src='d3.v3.min.js'></script>
 
 	<style>
@@ -66,14 +72,14 @@
 <body>
 
 <h2>Communicating uncertainty</h2>
-<p>Can interactive graphics help? In this experimental visualisation, a single estimated point (x=10, y=10) carries some uncertainty. By clicking on the button below, a series of probable values appears. These might be bootstrapped values, draws from a posterior joint distribution, or just representing a theoretical sampling distribution. By clicking on the chart region, you can see the probability of the true value being as far away as your point, or further. (My wording is unapologetically Bayesian.) <em>and by the way, this version is for the CCU conference and right now, I'm still trying to debug the confidence ellipse</em></p>
+<p>Can interactive graphics help? In this experimental visualisation, a single estimated point (x=10, y=10) carries some uncertainty. By clicking on the button below, a series of probable values appears. These might be bootstrapped values, draws from a posterior joint distribution, or just representing a theoretical sampling distribution. By clicking on the chart region, you can see the probability of the true value being as far away as your point, or further. (My wording is unapologetically Bayesian.)</p>
 <button onclick="animateit()">Show probable true values</button>
 
 <script type='text/javascript'>
 // various size parameters and scales
-	var margin = {top: 30, left: 80, right: 300, bottom: 60},
-		width = 900 - margin.left - margin.right,
-		height = 310 - margin.top - margin.bottom,
+	var margin = {top: 30, left: 100, right: 200, bottom: 60},
+		width = 700 - margin.left - margin.right,
+		height = 490 - margin.top - margin.bottom,
 		axisLabelSpace = 50,
 		legendSpace = 100,
 		x = d3.scale.linear().range([0, width]),
@@ -84,7 +90,7 @@
 		mausx=0,mausy=0,xx=0,yy=0,
 		ellipserad=0,ellipsedeg=0,ellipsex=0,ellipsey=0,ellipsesize=0,
 		xt=0,yt=0,xd=0,yd=0,xpr=0,ypr=0,perc=0,
-		varx=1,vary=Math.sqrt(5);
+		sdx=2.82,sdy=2;
 
 	svg = d3.select('body')
 		.append('svg')
@@ -93,16 +99,22 @@
 			.attr('height', height + margin.top + margin.bottom)
 			.on("click", function() {
 				mausx=d3.mouse(this)[0];
+
 				xx=-1*Math.abs((mausx-(x(10)+margin.left))/(x(11)-x(10)));
 				xt=1/(1+.2316419*Math.abs(xx));				xd=.3989423*Math.exp(-xx*xx/2);				xpr=xd*xt*(.3193815+xt*(-.3565638+xt*(1.781478+xt*(-1.821256+xt*1.330274))));				xpr=2*xpr;
+
 				mausy=d3.mouse(this)[1];
+
 				yy=-1*Math.abs((mausy-(y(x.invert(mausx-margin.left))+margin.top))/
 						(Math.sqrt(5)*(y(9)-y(10))));
 				yt=1/(1+.2316419*Math.abs(yy));				yd=.3989423*Math.exp(-yy*yy/2);				ypr=yd*yt*(.3193815+yt*(-.3565638+yt*(1.781478+yt*(-1.821256+yt*1.330274))));				ypr=2*ypr;
 				perc = Math.round(xpr*ypr*1000)/10;
+
+				// make tooltip visible
 				div.transition()
 					.duration(200)
 					.style('opacity',.9);
+				// place tooltip left or right
 				var ttleft=d3.event.pageX+4;
 				if (mausx<(x(10)+margin.left)) {
 					ttleft=ttleft-112;
@@ -119,19 +131,31 @@
 					.style('fill','rgba(42,43,103,255)')
 					.attr('cx', mausx-margin.left)
 					.attr('cy', mausy-margin.top);
-				ellipserad=-1*Math.atan((vary*(y(9)-y(10)))/(varx*(x(10)-x(9))));
-				ellipsedeg=57.296*ellipserad;
-				ellipsex=((x.invert(mausx-margin.left)-10)*Math.cos(-1*ellipserad))-
-					((y.invert(mausy-margin.top)-10)*Math.sin(-1*ellipserad));
-				ellipsey=((x.invert(mausx-margin.left)-10)*Math.sin(-1*ellipserad))-
-					((y.invert(mausy-margin.top)-10)*Math.cos(-1*ellipserad));
-				ellipsesize=Math.sqrt((ellipsex*ellipsex) +(ellipsey*ellipsey/5));
+
+				// rotational angle for the ellipse in axis units - determined by data
+				ellipsedeg= -45;
+				rotrad=3.14159*ellipsedeg/180;
+				// find the rotational angle in pixels for the SVG ellipse (forced together by SVG & domain x=y)
+				ellipserad=rotrad;
+
+				// lengths of axes
+				
+				// click position in axis values
+				xpos=x.invert(mausx-margin.left);
+				ypos=y.invert(mausy-margin.top);
+
+				// rotate to get ellipse onto x and y axes
+				xrot=((xpos-10)*Math.cos(rotrad))-((ypos-10)*Math.sin(rotrad));
+				yrot=((xpos-10)*Math.sin(rotrad))+((ypos-10)*Math.cos(rotrad));
+
+				// get size of ellipse in natural x,y scale
+				k=Math.sqrt((xrot*xrot/(sdx*sdx))+(yrot*yrot/(sdy*sdy)));
 				svg.append('ellipse')
 					.attr('id','theci')
 					.attr('cx',x(10))
 					.attr('cy',y(10))
-					.attr('rx',(x(10)-x(9))*ellipsesize)
-					.attr('ry',(y(9)-y(10))*Math.sqrt(5)*ellipsesize)
+					.attr('rx',(x(10)-x(9))*k*sdx)
+					.attr('ry',(y(9)-y(10))*k*sdy)
 					.attr('transform','rotate('+ellipsedeg+','+x(10)+','+y(10)+')')
 					.style('stroke','rgba(42,43,103,200)')
 					.style('fill','rgba(42,43,103,0)');
@@ -354,13 +378,19 @@
 	var scattermaxx = d3.max(scatterdata, function(d) { return d.xvar; });
 	var scatterminy = d3.min(scatterdata, function(d) { return d.yvar; });
 	var scattermaxy = d3.max(scatterdata, function(d) { return d.yvar; });
+	// these 4 don't get used at present
 	var allminx = scatterminx - domainPadding * (scattermaxx-scatterminx);
 	var allmaxx = scattermaxx + domainPadding * (scattermaxx-scatterminx);
 	var allminy = scatterminy - domainPadding * (scattermaxy-scatterminy);
 	var allmaxy = scattermaxy + domainPadding * (scattermaxy-scatterminy);
 
-	x.domain([allminx,allmaxx]);
-	y.domain([allminy,allmaxy]);
+	var scmin = Math.min(scatterminx,scatterminy);
+	var scmax = Math.max(scattermaxx,scattermaxy);
+	var allmin = scmin - domainPadding * (scmax-scmin);
+	var allmax = scmax + domainPadding * (scmax-scmin);
+
+	x.domain([allmin,allmax]);
+	y.domain([allmin,allmax]);
 
 	// draw the posterior points (transparent to begin)
 	svg.selectAll('dot')

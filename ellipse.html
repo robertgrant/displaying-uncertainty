@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<title>CCU 2015 Example 1</title>
+	<script type='text/javascript' src='d3.v3.min.js'></script>
+
+	<style>
+		body { 
+			font-family: 'helvetica'; 
+		}
+		path { 
+			stroke: steelblue;
+			stroke-width: 1;
+			fill: none;
+		}
+		.axis path, .axis line {
+			fill: none;
+			stroke: grey;
+			stroke-width: 1;
+			shape-rendering: crispEdges;
+		     }
+		.dot {
+			fill: rgba(255,255,255,0);
+			stroke: steelblue;
+		}
+
+	</style>
+
+</head>
+
+<body>
+	<script type='text/javascript'>
+	// various size parameters and scales
+	var margin = {top: 30, left: 100, right: 200, bottom: 60},
+		width = 600 - margin.left - margin.right,
+		height = 390 - margin.top - margin.bottom,
+		axisLabelSpace = 50,
+		x = d3.scale.linear().range([0, width]),
+		y = d3.scale.linear().range([height, 0]),
+		xAxis = d3.svg.axis().scale(x).orient('bottom').ticks(5),
+		yAxis = d3.svg.axis().scale(y).orient('left').ticks(5),
+		sdmajor=1,sdminor=Math.sqrt(5);
+
+	svg = d3.select('body')
+		.append('svg')
+			.attr('id','thesvg')
+			.attr('width', width + margin.left + margin.right)
+			.attr('height', height + margin.top + margin.bottom)
+			.on("click", function() {
+				mausx=d3.mouse(this)[0];
+				mausy=d3.mouse(this)[1];
+				svg.selectAll('#ciclick').remove();
+				svg.selectAll('#theci').remove();
+				
+				// add circle at click point
+				svg.append('circle')
+					.attr('r', 2)
+					.attr('id', 'ciclick')
+					.style('stroke','rgba(42,43,103,255)')
+					.style('fill','rgba(42,43,103,255)')
+					.attr('cx', mausx-margin.left)
+					.attr('cy', mausy-margin.top);
+				
+				// click position in axis values
+				xpos=x.invert(mausx-margin.left)-10;
+				ypos=y.invert(mausy-margin.top)-10;
+
+				// click position in pixels (x(10),y(10) is the origin)
+				xpix=mausx-margin.left-x(10);
+				ypix=mausy-margin.top-y(10);
+
+				// rotate xpix and ypix
+				xrot=(xpos*Math.cos(-0.7854)) - (ypos*Math.sin(-0.7854));
+				yrot=(xpos*Math.sin(-0.7854)) + (ypos*Math.cos(-0.7854));
+
+				// get scale of ellipse to fit point
+				k=Math.sqrt((xrot*xrot/(sdmajor*sdmajor))+(yrot*yrot/(sdminor*sdminor)));
+
+				// draw the ellipse
+				svg.append('ellipse')
+					.attr('id','theci')
+					.attr('cx',x(10))
+					.attr('cy',y(10))
+					.attr('rx',(x(10)-x(9))*k*sdmajor)
+					.attr('ry',(y(9)-y(10))*k*sdminor)
+					.attr('transform','rotate(-45,'+x(10)+','+y(10)+')')
+					.style('stroke','rgba(42,43,103,200)')
+					.style('fill','rgba(42,43,103,0)');
+			})
+
+		.append('g')
+			.attr('transform',
+				'translate(' + margin.left + ',' + margin.top + ')')
+			.attr('id', 'chart');
+
+	var point = [ {'xvar': 10.0, 'yvar': 10.0} ];
+
+
+	x.domain([5,15]);
+	y.domain([5,15]);
+
+	// draw the point estimate
+	svg.selectAll('dot')
+		.data(point)
+		.enter().append('circle')
+			.attr('r', 6)
+			.attr('id', 'point')
+			.style('stroke','rgba(103,42,43,255)')
+			.style('fill','rgba(103,42,43,70)')
+			.attr('cx', function(d) { return x(d.xvar); })
+			.attr('cy', function(d) { return y(d.yvar); });
+
+	svg.append('g')
+		.attr('class', 'x axis')
+		.attr('transform', 'translate(0,' + height + ')')
+		.call(xAxis);
+
+	svg.append('text')
+		.attr('transform','translate('+(width/2)+','+(height+axisLabelSpace)+')')
+		.style('text-anchor','middle')
+		.text('A variable');
+
+	svg.append('g')
+		.attr('class', 'y axis')
+		.call(yAxis);
+
+	svg.append('text')
+		.attr('transform','rotate(-90)')
+		.attr('x',0-(height/2))
+		.attr('y',0-axisLabelSpace)
+		.attr('dy','1em')
+		.style('text-anchor','middle')
+		.text('Another variable');
+
+</script>
+</body>
